@@ -10,9 +10,11 @@ crate-type = ["cdylib"]
 anyhow = "1"
 futures = "0.3.28"
 prost = "0.13.5"
-wasi-grpc = { path = "../.." }
+wasi-grpc = { path = "../../crates/wasi-grpc-client" }
 spin-sdk =  "4.0.0"
 tonic = { version = "0.13.1", features = ["codegen", "prost", "router"], default-features = false}
 
 [build-dependencies]
 tonic-build = { version = "0.13.1", features = ["prost"] }
+
+[workspace]

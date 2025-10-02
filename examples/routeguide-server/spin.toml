@@ -1,0 +1,20 @@
+#:schema https://schemas.spinframework.dev/spin/manifest-v2/latest.json
+
+spin_manifest_version = 2
+
+[application]
+name = "grpc-inbound-test"
+version = "0.1.0"
+authors = ["itowlson <ivan.towlson@fermyon.com>"]
+description = ""
+
+[[trigger.http]]
+route = "/..."
+component = "grpc-inbound-test"
+
+[component.grpc-inbound-test]
+source = "target/wasm32-wasip1/release/grpc_inbound_test.wasm"
+allowed_outbound_hosts = ["https://www.fermyon.com"]
+[component.grpc-inbound-test.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

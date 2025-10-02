@@ -62,3 +62,7 @@ let response = client.get_feature(Request::new(Point {
 ## 🔒 Spin Notes
 
 This project assumes execution in a **Spin-compliant runtime** that allows outbound networking via Spin's capability-based model. Ensure your `spin.toml` includes the appropriate `allowed_outbound_hosts` granting outbound access to your gRPC service's endpoint.
+
+## Writing gRPC servers
+
+This repo also contains the `wasi-grpc-server` crate, which provides a helper for writing gRPC services as `wasi:http` handlers.  See the [crate documentation](./crates/wasi-grpc-server/README.md) for more information.

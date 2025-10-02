@@ -1,15 +1,3 @@
-[package]
-name = "wasi-grpc"
-version = "0.1.0"
-edition = "2024"
-license = "Apache-2.0 WITH LLVM-exception"
-description = "gRPC clients on Spin / WASI Hyperium"
-
-[dependencies]
-anyhow = "1"
-hyperium = { package = "http", version = "1.0.0" }
-spin-executor =  "4.0.0"
-tonic = { version = "0.13.1", features = ["prost", "router"], default-features = false}
-tower-service = { version = "0.3.2" }
-wasi-hyperium = "0.3.0"
-wasi = "=0.13.1"
+[workspace]
+members = ["crates/*"]
+resolver = "3"
