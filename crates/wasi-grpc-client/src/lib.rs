@@ -1,25 +1,58 @@
 use hyperium::{Uri, uri::Parts};
-use spin_executor::CancelToken;
 use std::future::Future;
 use std::pin::Pin;
-use std::task::{Context, Poll};
+use std::task::Poll;
 use tonic::body::Body;
 use tower_service::Service;
-use wasi::io::poll::Pollable;
 use wasi_hyperium::{IncomingHttpBody, hyperium1::send_outbound_request, poll::PollableRegistry};
 
-pub struct WasiGrpcEndpoint {
+#[cfg(feature = "spin")]
+pub use spin::SpinExecutorPoller;
+
+/// A `tower::Service` that sends tonic requests over `wasi:http`.
+///
+/// The `Registry` decides how WASI pollables are driven. With the default
+/// `spin` feature it is [`SpinExecutorPoller`] (use with `spin_executor::run`
+/// or a Spin async handler). Other executors can supply their own
+/// [`PollableRegistry`] — e.g. [`wasi_hyperium::poll::Poller`] driven by its
+/// own `block_on` — via [`WasiGrpcEndpoint::with_registry`].
+#[cfg(feature = "spin")]
+pub struct WasiGrpcEndpoint<Registry = SpinExecutorPoller> {
     endpoint: Uri,
+    registry: Registry,
 }
 
+/// A `tower::Service` that sends tonic requests over `wasi:http`.
+///
+/// The `Registry` decides how WASI pollables are driven, e.g.
+/// [`wasi_hyperium::poll::Poller`] driven by its own `block_on`.
+#[cfg(not(feature = "spin"))]
+pub struct WasiGrpcEndpoint<Registry> {
+    endpoint: Uri,
+    registry: Registry,
+}
+
+#[cfg(feature = "spin")]
 impl WasiGrpcEndpoint {
+    /// Creates an endpoint driven by the Spin executor.
     pub fn new(endpoint: Uri) -> Self {
-        WasiGrpcEndpoint { endpoint }
+        Self::with_registry(endpoint, SpinExecutorPoller)
     }
 }
 
-impl Service<hyperium::Request<Body>> for WasiGrpcEndpoint {
-    type Response = hyperium::Response<IncomingHttpBody<SpinExecutorPoller>>;
+impl<Registry> WasiGrpcEndpoint<Registry> {
+    /// Creates an endpoint driven by the given pollable registry.
+    pub fn with_registry(endpoint: Uri, registry: Registry) -> Self {
+        WasiGrpcEndpoint { endpoint, registry }
+    }
+}
+
+impl<Registry> Service<hyperium::Request<Body>> for WasiGrpcEndpoint<Registry>
+where
+    Registry: PollableRegistry + Send + 'static,
+    Registry::RegisteredPollable: Send,
+{
+    type Response = hyperium::Response<IncomingHttpBody<Registry>>;
     type Error = wasi_hyperium::Error;
     #[allow(clippy::type_complexity)]
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -37,32 +70,67 @@ impl Service<hyperium::Request<Body>> for WasiGrpcEndpoint {
         parts.authority = authority;
         parts.scheme = scheme;
 
-        *req.uri_mut() = parts.try_into().unwrap();
+        let uri = match Uri::from_parts(parts) {
+            Ok(uri) => uri,
+            Err(e) => {
+                return Box::pin(std::future::ready(Err(wasi_hyperium::Error::WasiError(
+                    format!("invalid gRPC request URI: {e}"),
+                ))));
+            }
+        };
+        *req.uri_mut() = uri;
 
-        Box::pin(send_outbound_request(req, SpinExecutorPoller))
+        Box::pin(send_outbound_request(req, self.registry.clone()))
     }
 }
 
-#[derive(Clone)]
-pub struct SpinExecutorPoller;
+#[cfg(feature = "spin")]
+mod spin {
+    use spin_executor::CancelToken;
+    use std::task::Context;
+    use wasi::io::poll::Pollable;
+    use wasi_hyperium::poll::PollableRegistry;
 
-impl PollableRegistry for SpinExecutorPoller {
-    type RegisteredPollable = CancelToken;
+    /// Registers WASI pollables with the Spin executor (`spin_executor::run`).
+    #[derive(Clone)]
+    pub struct SpinExecutorPoller;
 
-    fn register_pollable(&self, cx: &mut Context, pollable: Pollable) -> Self::RegisteredPollable {
-        spin_executor::push_waker_and_get_token(pollable, cx.waker().clone())
+    impl PollableRegistry for SpinExecutorPoller {
+        type RegisteredPollable = CancelToken;
+
+        fn register_pollable(
+            &self,
+            cx: &mut Context,
+            pollable: Pollable,
+        ) -> Self::RegisteredPollable {
+            spin_executor::push_waker_and_get_token(pollable, cx.waker().clone())
+        }
+
+        // This should never be called when using `spin_executor::run`
+        fn poll(&self) -> bool {
+            panic!("not supported for wasi-grpc")
+        }
+
+        // This should never be called when using `spin_executor::run`
+        fn block_on<T>(
+            &self,
+            _fut: impl std::future::Future<Output = T>,
+        ) -> Result<T, wasi_hyperium::poll::Stalled> {
+            panic!("not supported for wasi-grpc")
+        }
     }
+}
 
-    // This should never be called when using `spin_executor::run`
-    fn poll(&self) -> bool {
-        panic!("not supported for wasi-grpc")
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    // This should never be called when using `spin_executor::run`
-    fn block_on<T>(
-        &self,
-        _fut: impl std::future::Future<Output = T>,
-    ) -> Result<T, wasi_hyperium::poll::Stalled> {
-        panic!("not supported for wasi-grpc")
+    fn assert_grpc_service<S: Service<hyperium::Request<Body>>>() {}
+
+    #[test]
+    fn endpoint_is_a_service_for_any_registry() {
+        assert_grpc_service::<WasiGrpcEndpoint<wasi_hyperium::poll::Poller>>();
+        #[cfg(feature = "spin")]
+        assert_grpc_service::<WasiGrpcEndpoint>();
     }
 }

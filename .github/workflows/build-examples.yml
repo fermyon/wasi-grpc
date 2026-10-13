@@ -10,7 +10,7 @@ on:
       - "README.md"
 
 env:
-  RUST_VERSION: "1.86"
+  RUST_VERSION: "1.88"
   SPIN_VERSION: ""
 
 jobs:
@@ -23,6 +23,10 @@ jobs:
         with:
           toolchain: "${{ env.RUST_VERSION }}"
           targets: wasm32-wasip1
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Install Spin
         uses: fermyon/actions/spin/setup@v1
       - name: Run build_examples.sh
