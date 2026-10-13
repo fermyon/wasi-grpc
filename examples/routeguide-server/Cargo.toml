@@ -3,7 +3,7 @@ name = "grpc-inbound-test"
 authors = ["itowlson <ivan.towlson@fermyon.com>"]
 description = ""
 version = "0.1.0"
-rust-version = "1.86"
+rust-version = "1.88"
 edition = "2021"
 
 [lib]
@@ -13,15 +13,16 @@ crate-type = ["cdylib"]
 anyhow = "1"
 async-stream = "0.3.6"
 futures = "0.3.31"
-prost = "0.13.5"
+prost = "0.14"
+tonic-prost = "0.14"
 wasi-grpc-server = { path = "../../crates/wasi-grpc-server" }
-spin-executor = "5.0.0"
-spin-sdk =  "5.0.0"
-tonic = { version = "0.13.1", features = ["codegen", "prost", "router"], default-features = false}
+spin-executor = "5.1.1"
+spin-sdk = "5.2"
+tonic = { version = "0.14", features = ["codegen", "router"], default-features = false }
 wasi = "=0.13.1"
 wasi-hyperium = "0.3.0"
 
 [build-dependencies]
-tonic-build = { version = "0.13.1", features = ["prost"] }
+tonic-prost-build = "0.14"
 
 [workspace]

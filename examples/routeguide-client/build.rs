@@ -1,6 +1,5 @@
 fn main() {
-    tonic_build::configure()
-        .type_attribute("routeguide.Point", "#[derive(Hash)]")
+    tonic_prost_build::configure()
         .build_transport(false)
         .compile_protos(&["route_guide.proto"], &[""])
         .unwrap();

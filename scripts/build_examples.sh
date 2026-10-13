@@ -1,6 +1,7 @@
 #!/bin/bash
 
 EXAMPLES_DIR="examples"
+failed=0
 
 if [[ ! -d "$EXAMPLES_DIR" ]]; then
   echo "Directory $EXAMPLES_DIR does not exist."
@@ -26,6 +27,7 @@ for example in "$EXAMPLES_DIR"/*; do
       echo "✅ spin build succeeded for $example_name"
     else
       echo "❌ spin build failed for $example_name"
+      failed=1
     fi
     
     echo "::endgroup::"
@@ -34,3 +36,5 @@ for example in "$EXAMPLES_DIR"/*; do
     cd - >/dev/null
   fi
 done
+
+exit $failed

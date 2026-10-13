@@ -20,20 +20,22 @@ Spin is a fast, secure WebAssembly framework for serverless apps. This project e
 [dependencies]
 anyhow = "1"
 futures = "0.3.28"
-prost = "0.13.5"
+prost = "0.14"
+tonic-prost = "0.14"
 wasi-grpc = "0.1.0"
-spin-sdk =  "4.0.0"
-tonic = { version = "0.13.1", features = ["codegen", "prost", "router"], default-features = false}
+spin-sdk = "5.2"
+tonic = { version = "0.14", features = ["codegen", "router"], default-features = false }
 ```
 
-### 2. Generate gRPC client code with `tonic-build`
+`wasi-grpc` registers WASI pollables with `spin-executor` 5, so use a `spin-sdk` that is built on `spin-executor` 5 (`spin-sdk` 5.x).
+
+### 2. Generate gRPC client code with `tonic-prost-build`
 
 In `build.rs`:
 
 ```rust
 fn main() {
-    tonic_build::configure()
-        .type_attribute("routeguide.Point", "#[derive(Hash)]")
+    tonic_prost_build::configure()
         .build_transport(false)
         .compile_protos(&["route_guide.proto"], &[""])
         .unwrap();
@@ -44,7 +46,7 @@ And in `Cargo.toml`:
 
 ```toml
 [build-dependencies]
-tonic-build = { version = "0.13.1", features = ["prost"] }
+tonic-prost-build = "0.14"
 ```
 
 ### 3. Call your gRPC service from a Spin component
@@ -59,10 +61,21 @@ let response = client.get_feature(Request::new(Point {
 })).await?;
 ```
 
+### Using another executor
+
+`WasiGrpcEndpoint::new` drives WASI pollables through the Spin executor. To use another executor, pass any [`PollableRegistry`](https://docs.rs/wasi-hyperium/latest/wasi_hyperium/poll/trait.PollableRegistry.html) to `WasiGrpcEndpoint::with_registry`. For example, `wasi_hyperium::poll::Poller` with its own `block_on`:
+
+```rust
+use wasi_hyperium::poll::{Poller, PollableRegistry};
+
+let poller = Poller::default();
+let endpoint = WasiGrpcEndpoint::with_registry(endpoint_uri, poller.clone());
+let mut client = RouteGuideClient::new(endpoint);
+let feature = poller.block_on(client.get_feature(Request::new(point)))??;
+```
+
+Disable the default `spin` feature to drop the `spin-executor` dependency.
+
 ## 🔒 Spin Notes
 
 This project assumes execution in a **Spin-compliant runtime** that allows outbound networking via Spin's capability-based model. Ensure your `spin.toml` includes the appropriate `allowed_outbound_hosts` granting outbound access to your gRPC service's endpoint.
-
-## Writing gRPC servers
-
-This repo also contains the `wasi-grpc-server` crate, which provides a helper for writing gRPC services as `wasi:http` handlers.  See the [crate documentation](./crates/wasi-grpc-server/README.md) for more information.
